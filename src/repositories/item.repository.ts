@@ -15,11 +15,11 @@ class ItemRepository {
   }
 
   async getAll(userId: string): Promise<ItemDocument[]> {
-    return await Item.find({ user: userId });
+    return await Item.find({ userId });
   }
 
   async getById(userId: string, id: string): Promise<ItemDocument | null> {
-    return await Item.findOne({ _id: id, user: userId });
+    return await Item.findOne({ _id: id, userId });
   }
 
   async update(
@@ -27,7 +27,7 @@ class ItemRepository {
     id: string,
     data: Partial<ItemDocument>
   ): Promise<ItemDocument | null> {
-    return await Item.findOneAndUpdate({ _id: id, user: userId }, data, {
+    return await Item.findOneAndUpdate({ _id: id, userId }, data, {
       new: true,
     });
   }
@@ -35,28 +35,28 @@ class ItemRepository {
   async delete(userId: string, id: string): Promise<ItemDocument | null> {
     return (await Item.findOneAndDelete({
       _id: id,
-      user: userId,
+      userId,
     })) as unknown as ItemDocument | null;
   }
 
   async getNotExpired(userId: string): Promise<ItemDocument[]> {
-    return await Item.find({ user: userId, expiryDate: { $gt: new Date() } });
+    return await Item.find({ userId, expiryDate: { $gt: new Date() } });
   }
 
   async getExpired(userId: string): Promise<ItemDocument[]> {
-    return await Item.find({ user: userId, expiryDate: { $lte: new Date() } });
+    return await Item.find({ userId, expiryDate: { $lte: new Date() } });
   }
 
   async getDailyReminders(userId: string): Promise<ItemDocument[]> {
-    return await Item.find({ user: userId, dailyReminder: true });
+    return await Item.find({ userId, dailyReminder: true });
   }
 
   async getCategoryPercentages(
     userId: string
   ): Promise<{ category: string; percentage: number }[]> {
-    const totalItems = await Item.countDocuments({ user: userId });
+    const totalItems = await Item.countDocuments({ userId });
     return await Item.aggregate([
-      { $match: { user: userId } },
+      { $match: { userId } },
       { $group: { _id: '$category', count: { $sum: 1 } } },
       {
         $project: {
@@ -71,7 +71,7 @@ class ItemRepository {
     userId: string
   ): Promise<{ _id: number; count: number }[]> {
     return await Item.aggregate([
-      { $match: { user: userId, expiryDate: { $lte: new Date() } } },
+      { $match: { userId, expiryDate: { $lte: new Date() } } },
       { $group: { _id: { $month: '$expiryDate' }, count: { $sum: 1 } } },
     ]);
   }
@@ -80,7 +80,7 @@ class ItemRepository {
     userId: string
   ): Promise<{ _id: string; count: number }[]> {
     return await Item.aggregate([
-      { $match: { user: userId, expiryDate: { $lte: new Date() } } },
+      { $match: { userId, expiryDate: { $lte: new Date() } } },
       { $group: { _id: '$itemName', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 1 },
