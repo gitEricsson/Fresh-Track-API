@@ -1,4 +1,5 @@
 import Item, { ItemDocument } from '../models/item.model';
+import { Types } from 'mongoose';
 
 class ItemRepository {
   private static instance: ItemRepository;
@@ -54,9 +55,10 @@ class ItemRepository {
   async getCategoryPercentages(
     userId: string
   ): Promise<{ category: string; percentage: number }[]> {
-    const totalItems = await Item.countDocuments({ userId });
+    const objectIdUserId = new Types.ObjectId(userId);
+    const totalItems = await Item.countDocuments({ userId: objectIdUserId });
     return await Item.aggregate([
-      { $match: { userId } },
+      { $match: { userId: objectIdUserId } },
       { $group: { _id: '$category', count: { $sum: 1 } } },
       {
         $project: {
@@ -70,8 +72,9 @@ class ItemRepository {
   async getExpiredByMonth(
     userId: string
   ): Promise<{ _id: number; count: number }[]> {
+    const objectIdUserId = new Types.ObjectId(userId);
     return await Item.aggregate([
-      { $match: { userId, expiryDate: { $lte: new Date() } } },
+      { $match: { userId: objectIdUserId, expiryDate: { $lte: new Date() } } },
       { $group: { _id: { $month: '$expiryDate' }, count: { $sum: 1 } } },
     ]);
   }
@@ -79,8 +82,10 @@ class ItemRepository {
   async getMostFrequentExpired(
     userId: string
   ): Promise<{ _id: string; count: number }[]> {
+    const objectIdUserId = new Types.ObjectId(userId);
+
     return await Item.aggregate([
-      { $match: { userId, expiryDate: { $lte: new Date() } } },
+      { $match: { userId: objectIdUserId, expiryDate: { $lte: new Date() } } },
       { $group: { _id: '$itemName', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 1 },

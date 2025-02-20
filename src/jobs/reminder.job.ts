@@ -10,32 +10,67 @@ const transporter = nodemailer.createTransport({
   port: 2525,
   secure: false,
   auth: {
-    user: AppConfig.brevo.username ?? '',
-    pass: AppConfig.brevo.password ?? '',
+    user:
+      AppConfig.brevo.username ||
+      (() => {
+        throw new Error('Brevo username is not set in the configuration');
+      })(),
+    pass:
+      AppConfig.brevo.password ||
+      (() => {
+        throw new Error('Brevo password is not set in the configuration');
+      })(),
   },
 });
 
 cron.schedule('0 9 * * *', async () => {
-  const items: ItemDocument[] = await Item.find({
-    dailyReminder: true,
-    expiryDate: { $lte: new Date() },
-  }).populate('userId', 'email');
+  try {
+    console.log('Reminder job started');
+    const items = await Item.aggregate([
+      {
+        $match: {
+          dailyReminder: true,
+          expiryDate: { $lte: new Date() },
+        },
+      },
+      {
+        $group: {
+          _id: '$userId',
+          items: { $push: '$$ROOT' },
+        },
+      },
+    ]);
 
-  for (const item of items) {
-    const user = await userRepository.findById(item.userId.toString());
+    for (const userItems of items) {
+      const user = await userRepository.findById(userItems._id.toString());
 
-    if (!user) {
-      throw new Error('User not found');
+      if (!user) {
+        console.error(`User not found for ID: ${userItems._id}`);
+        continue;
+      }
+
+      const userEmail = user.email;
+      const itemList = userItems.items
+        .map(
+          (item: ItemDocument) =>
+            `Item: ${item.itemName}, Category: ${
+              item.category
+            }, Expiry Date: ${item.expiryDate.toDateString()}`
+        )
+        .join('\n');
+
+      await transporter.sendMail({
+        from: '"Food Expiry Tracker" <noreply@ericsson.com>',
+        to: userEmail,
+        subject: 'Reminder: Items expiring soon!',
+        text: `The following items are expiring soon:\n\n${itemList}\n\n\nThis is an automated message. Please do not reply.`,
+      });
+
+      console.log(`Reminder email sent to ${userEmail}`);
     }
 
-    const userEmail = user.email;
-    await transporter.sendMail({
-      from: '"Food Expiry Tracker" <noreply@example.com>',
-      to: userEmail,
-      subject: `Reminder: ${item.itemName} is expiring soon!`,
-      text: `Your item "${item.itemName}" in category "${
-        item.category
-      }" is expiring on ${item.expiryDate.toDateString()}. Please take action.`,
-    });
+    console.log('Reminder job completed');
+  } catch (error) {
+    console.error('Error in reminder job:', error);
   }
 });
